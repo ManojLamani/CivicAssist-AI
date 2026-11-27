@@ -20,6 +20,19 @@ jobs:
       - run: npm run build
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_DB: civicassist_test
+          POSTGRES_USER: civicassist
+          POSTGRES_PASSWORD: test_password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U civicassist -d civicassist_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://civicassist:test_password@localhost:5432/civicassist_test
     defaults:
       run:
         working-directory: backend

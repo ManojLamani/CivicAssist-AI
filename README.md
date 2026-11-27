@@ -8,6 +8,7 @@ Basic development setup for an independent civic grievance platform for Bengalur
 - Requested frontend/backend libraries, recorded in npm and uv lockfiles.
 - PostgreSQL/PostGIS, Redis, Qdrant, and a Celery worker through Docker Compose.
 - Environment examples, API health check, and basic CI checks.
+- SQLAlchemy models and Alembic migrations for roles, users, departments, and department operators.
 
 ## Run with Docker
 
@@ -19,6 +20,8 @@ docker compose up --build -d --wait --wait-timeout 300
 ```
 
 Frontend: <http://localhost:3000>. API docs: <http://localhost:8000/docs>. Process health: <http://localhost:8000/api/v1/health>.
+
+Compose runs database migrations before starting the API. The database contains the three role names only; no accounts, departments, or government responsibility mappings are seeded. This schema does not yet implement authentication or role-based authorization.
 
 ```powershell
 docker compose exec -T backend python -c "from app.workers.celery_app import ping; assert ping.delay().get(timeout=30) == 'pong'"
@@ -47,6 +50,7 @@ In a second terminal from the repository root:
 ```powershell
 cd backend
 uv sync --locked --extra ml
+uv run --extra ml alembic upgrade head
 uv run --extra ml uvicorn app.main:app --reload
 ```
 
@@ -67,4 +71,15 @@ cd ..
 docker compose config --quiet
 ```
 
-Authentication, domain schema/migrations, complaints, maps, RAG pipelines, and administration are intentionally deferred to future work. Never commit real credentials.
+For native database commands, copy the root `.env.example` to `.env` first. Configuration reads that file; shell variables take precedence. Commit successful writes explicitly when using the session dependency; unfinished transactions roll back when the session closes.
+
+To create a schema migration: `uv run alembic revision --autogenerate -m "describe change"`. Review generated SQL before applying it. To roll back this initial schema on a disposable database: `uv run alembic downgrade base` (deletes the identity/department tables, retains PostGIS).
+
+PostgreSQL integration tests run automatically in CI. To run locally from `backend/`:
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql+psycopg://civicassist:civicassist_local@localhost:5432/civicassist"
+uv run pytest
+```
+
+Tests create a random schema inside a transaction and roll it back. Without `TEST_DATABASE_URL`, database tests are skipped. They verify migrations, model/schema agreement, persistence, rollback, unique constraints, and foreign keys. No authentication endpoints, complaint tables, maps, RAG pipelines, or administrative APIs are implemented yet. Never commit real credentials.
