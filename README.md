@@ -28,6 +28,7 @@ docker compose down
 `down` preserves database volumes. Ports bind to localhost. The example credentials and Compose configuration are for local development only. `NEXT_PUBLIC_API_URL` is embedded at frontend build time; rebuild when changing it.
 
 If port 8000 is occupied, set `BACKEND_PORT=8010` and `NEXT_PUBLIC_API_URL=http://localhost:8010` in `.env` before building.
+If port 3000 is occupied, set `FRONTEND_PORT=3010` and `FRONTEND_URL=http://localhost:3010`.
 
 ## Native development
 
