@@ -2,7 +2,7 @@ name: civicassist
 
 x-backend: &backend
   build: ./backend
-  environment: &backend-env
+  environment:
     DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-civicassist}:${POSTGRES_PASSWORD:-civicassist_local}@postgres:5432/${POSTGRES_DB:-civicassist}
     REDIS_URL: redis://redis:6379/0
     QDRANT_URL: http://qdrant:6333
@@ -42,7 +42,7 @@ services:
 
   backend:
     <<: *backend
-    ports: ["127.0.0.1:8000:8000"]
+    ports: ["127.0.0.1:${BACKEND_PORT:-8000}:8000"]
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
