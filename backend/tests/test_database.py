@@ -45,13 +45,18 @@ def test_migration_matches_models_and_can_be_reapplied(migrated_database):
         "administrator",
         "department_operator",
     }
+    connection.execute(text("CREATE TABLE external_table (id integer)"))
     command.check(config)
     command.upgrade(config, "head")
     command.downgrade(config, "base")
-    assert "users" not in inspect(connection).get_table_names()
+    tables = inspect(connection).get_table_names(schema=connection.dialect.default_schema_name)
+    assert "users" not in tables
+    assert "external_table" in tables
     assert connection.scalar(text("SELECT PostGIS_Version()"))
     command.upgrade(config, "head")
-    assert "users" in inspect(connection).get_table_names()
+    assert "users" in inspect(connection).get_table_names(
+        schema=connection.dialect.default_schema_name
+    )
 
 
 def test_persistence_defaults_and_rollback(migrated_database):

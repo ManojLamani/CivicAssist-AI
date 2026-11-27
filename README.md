@@ -75,6 +75,8 @@ For native database commands, copy the root `.env.example` to `.env` first. Conf
 
 To create a schema migration: `uv run alembic revision --autogenerate -m "describe change"`. Review generated SQL before applying it. To roll back this initial schema on a disposable database: `uv run alembic downgrade base` (deletes the identity/department tables, retains PostGIS).
 
+Autogeneration only inspects mapped application tables, leaving extension-owned and unrelated tables alone. Removing a table requires an explicit reviewed `op.drop_table` migration.
+
 PostgreSQL integration tests run automatically in CI. To run locally from `backend/`:
 
 ```powershell

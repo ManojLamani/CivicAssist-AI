@@ -9,7 +9,8 @@ def migrate(connection):
     context.configure(
         connection=connection,
         target_metadata=Base.metadata,
-        include_name=lambda name, kind, parents: name != "spatial_ref_sys",
+        # Restrict autogeneration to our models; never drop extension-owned tables.
+        include_name=lambda name, kind, parents: kind != "table" or name in Base.metadata.tables,
     )
     with context.begin_transaction():
         context.run_migrations()
