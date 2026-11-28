@@ -33,6 +33,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visib
 .receipt-details { display: grid; grid-template-columns: auto 1fr; gap: .75rem 1.5rem; }
 .receipt-details dt { font-weight: 600; }
 .receipt-details dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
+.complaint-actions { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0; }
+.complaint-list { list-style: none; padding: 0; }
+.complaint-list li { padding: 1.25rem 0; border-bottom: 1px solid #d7dbd4; }
+.complaint-list li > a { font-weight: 600; font-size: 1.1rem; overflow-wrap: anywhere; }
+.complaint-reference { font-family: var(--font-geist-mono), monospace; font-size: .875rem; overflow-wrap: anywhere; }
+.complaint-description { white-space: pre-wrap; overflow-wrap: anywhere; }
+.account-panel h2 { font-size: 1.25rem; font-weight: 600; margin: 1.5rem 0 .75rem; }
 button, .button { display: inline-block; font: inherit; font-weight: 600; padding: .9rem 1.3rem; border: 1px solid #183b32; border-radius: .25rem; background: #c5f36a; color: #183b32; cursor: pointer; text-decoration: none; text-align: center; }
 form button { width: 100%; }
 button:hover, .button:hover { background: #b5e658; }

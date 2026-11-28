@@ -106,3 +106,84 @@ def test_submission_keys_are_scoped_to_each_citizen(auth_client, report):
     assert one.status_code == two.status_code == 201
     assert one.json()["id"] != two.json()["id"]
     assert connection.scalar(select(func.count()).select_from(Complaint)) == 2
+
+
+def test_list_is_owned_paginated_and_deterministic(auth_client, report):
+    client, _ = auth_client
+    owner, _, _ = login(client)
+    receipts = [
+        client.post(
+            "/api/v1/complaints",
+            json=report | {"submission_id": str(uuid4()), "title": f"Citizen report {number}"},
+            headers=owner,
+        ).json()
+        for number in range(2)
+    ]
+    other, other_user, _ = login(client, "another@example.com")
+    client.post("/api/v1/complaints", json=report, headers=other)
+    response = client.get(f"/api/v1/complaints?limit=1&user_id={other_user['id']}", headers=owner)
+    assert response.status_code == 200
+    page = response.json()
+    assert page["total"] == 2 and page["limit"] == 1 and page["offset"] == 0
+    assert len(page["items"]) == 1
+    assert set(page["items"][0]) == {"id", "title", "category", "status", "created_at"}
+    expected = sorted([item["id"] for item in receipts], reverse=True)
+    assert page["items"][0]["id"] == expected[0]
+    second = client.get("/api/v1/complaints?limit=1&offset=1", headers=owner).json()
+    assert second["items"][0]["id"] == expected[1]
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_tracking_cannot_read_another_citizens_complaint(auth_client, report):
+    client, _ = auth_client
+    owner, _, _ = login(client)
+    receipt = client.post("/api/v1/complaints", json=report, headers=owner).json()
+    path = f"/api/v1/complaints/{receipt['id']}"
+    response = client.get(path, headers=owner)
+    assert response.status_code == 200
+    detail = response.json()
+    assert {key: value for key, value in detail.items() if key != "history"} == receipt
+    assert len(detail["history"]) == 1 and detail["history"][0]["to_status"] == "submitted"
+    assert response.headers["cache-control"] == "no-store"
+    other, _, _ = login(client, "another@example.com")
+    forbidden = client.get(path, headers=other)
+    missing = client.get(f"/api/v1/complaints/{uuid4()}", headers=other)
+    assert forbidden.status_code == missing.status_code == 404
+    assert forbidden.json() == missing.json() == {"detail": "Complaint not found"}
+
+
+def test_empty_list_and_read_authentication(auth_client, report):
+    client, _ = auth_client
+    assert client.get("/api/v1/complaints").status_code == 401
+    owner, _, tokens = login(client)
+    assert client.get("/api/v1/complaints", headers=owner).json() == {
+        "items": [],
+        "total": 0,
+        "limit": 20,
+        "offset": 0,
+    }
+    receipt = client.post("/api/v1/complaints", json=report, headers=owner).json()
+    path = f"/api/v1/complaints/{receipt['id']}"
+    assert client.get(path).status_code == 401
+    client.post("/api/v1/auth/logout", json={"refresh_token": tokens["refresh_token"]})
+    assert client.get("/api/v1/complaints", headers=owner).status_code == 401
+    assert client.get(path, headers=owner).status_code == 401
+
+
+@pytest.mark.parametrize("role", ["administrator", "department_operator"])
+def test_citizen_reads_do_not_grant_administrative_access(auth_client, report, role):
+    client, connection = auth_client
+    owner, _, _ = login(client)
+    receipt = client.post("/api/v1/complaints", json=report, headers=owner).json()
+    connection.execute(update(User).values(role_name=role))
+    assert client.get("/api/v1/complaints", headers=owner).status_code == 403
+    assert client.get(f"/api/v1/complaints/{receipt['id']}", headers=owner).status_code == 403
+
+
+@pytest.mark.parametrize(
+    "query", ["limit=0", "limit=51", "offset=-1", "offset=100001", "limit=invalid"]
+)
+def test_pagination_bounds(auth_client, query):
+    client, _ = auth_client
+    owner, _, _ = login(client)
+    assert client.get(f"/api/v1/complaints?{query}", headers=owner).status_code == 422
