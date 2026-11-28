@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import AuthSettings, get_auth_settings
 from app.database import get_session
-from app.models import User
+from app.models import LoginSession, User
 from app.security import (
     TOKEN_LIFETIME,
     create_access_token,
@@ -20,6 +21,7 @@ from app.security import (
     password_hash,
     unauthorized,
 )
+from app.sessions import revoke_session, rotate_session, start_session
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 Database = Annotated[Session, Depends(get_session)]
@@ -58,8 +60,25 @@ class UserOutput(BaseModel):
 
 class TokenOutput(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     expires_in: int = int(TOKEN_LIFETIME.total_seconds())
+
+
+class RefreshInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    refresh_token: SecretStr = Field(min_length=1, max_length=128)
+
+
+def token_response(
+    login_session: LoginSession, refresh_token: str, settings: AuthSettings, response: Response
+) -> TokenOutput:
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return TokenOutput(
+        access_token=create_access_token(login_session.user_id, login_session.id, settings),
+        refresh_token=refresh_token,
+    )
 
 
 @router.post("/register", status_code=201, response_model=UserOutput)
@@ -84,8 +103,6 @@ def register(data: RegisterInput, session: Database):
 
 @router.post("/login", response_model=TokenOutput)
 def login(data: LoginInput, session: Database, settings: Configuration, response: Response):
-    response.headers["Cache-Control"] = "no-store"
-    response.headers["Pragma"] = "no-cache"
     user = session.scalar(select(User).where(User.email == str(data.email)))
     try:
         valid = password_hash.verify(
@@ -95,7 +112,20 @@ def login(data: LoginInput, session: Database, settings: Configuration, response
         valid = False
     if not user or not valid:
         raise unauthorized()
-    return TokenOutput(access_token=create_access_token(user.id, settings))
+    login_session, refresh_token = start_session(session, user.id)
+    return token_response(login_session, refresh_token, settings, response)
+
+
+@router.post("/refresh", response_model=TokenOutput)
+def refresh(data: RefreshInput, session: Database, settings: Configuration, response: Response):
+    login_session, refresh_token = rotate_session(session, data.refresh_token.get_secret_value())
+    return token_response(login_session, refresh_token, settings, response)
+
+
+@router.post("/logout", status_code=204)
+def logout(data: RefreshInput, session: Database):
+    revoke_session(session, data.refresh_token.get_secret_value())
+    return Response(status_code=204)
 
 
 def get_current_user(
@@ -105,7 +135,16 @@ def get_current_user(
 ) -> User:
     if credentials is None:
         raise unauthorized()
-    user = session.get(User, decode_access_token(credentials.credentials, settings))
+    user_id, session_id = decode_access_token(credentials.credentials, settings)
+    login_session = session.get(LoginSession, session_id)
+    if (
+        login_session is None
+        or login_session.user_id != user_id
+        or login_session.revoked_at
+        or login_session.expires_at <= datetime.now(UTC)
+    ):
+        raise unauthorized()
+    user = session.get(User, user_id)
     if user is None:
         raise unauthorized()
     return user
