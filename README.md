@@ -1,6 +1,6 @@
 # CivicAssist AI
 
-Development foundation for an independent civic grievance platform for Bengaluru. Citizen authentication is available through the API; grievance features and government integrations are not implemented yet.
+Development foundation for an independent civic grievance platform for Bengaluru. Citizen registration and login are available in the browser and API; grievance features and government integrations are not implemented yet.
 
 ## Included
 
@@ -65,6 +65,7 @@ For a native Windows worker, run `uv run celery -A app.workers.celery_app:celery
 ```powershell
 cd frontend
 npm run typecheck
+npm test
 npm run build
 cd ../backend
 uv run ruff check .
@@ -100,4 +101,12 @@ Use the API docs to register and log in, then paste the token into **Authorize**
 
 Access tokens expire after 15 minutes and are checked against their database session on protected requests, so logout and refresh-token replay revoke access immediately. Tokens issued before this session migration lack the required session ID; log in again after upgrading. Apply `uv run alembic upgrade head` for native development; Compose runs the migration automatically. Downgrading this migration deletes login sessions and refresh-token history.
 
-Email verification, password reset, login throttling, role-protected administrative endpoints, and frontend auth screens/storage remain separate follow-ups. Refresh tokens are credentials: keep them private and out of URLs/logs. Local HTTP is for development; deployed authentication requires HTTPS.
+Email verification, password reset, login throttling, role-protected administrative endpoints, and persistent browser token storage remain separate follow-ups. Refresh tokens are credentials: keep them private and out of URLs/logs. Local HTTP is for development; deployed authentication requires HTTPS.
+
+## Browser authentication
+
+Open `/register` to create a citizen account, then `/login` to sign in. `/account` verifies the current user through the API and provides logout. Forms validate inputs, prevent duplicate submissions, and show account-conflict, credential, and connection errors. No complaint dashboard or reporting workflow is included yet.
+
+This minimal frontend stores tokens only in memory. Navigation through its links preserves the session; reloading or closing the page requires signing in again. It does not write tokens to localStorage, sessionStorage, cookies, or URLs. Expired access checks share one refresh request and save the rotated token. A failed server logout retains the session for retry. Persistent browser sessions remain a separate follow-up.
+
+`NEXT_PUBLIC_API_URL` must be reachable from the browser, and the backend's `FRONTEND_URL` must match the frontend origin. These values are already configured by Compose. Run `npm test` in `frontend/` for the auth-client tests; CI runs them alongside typechecking and the build.
