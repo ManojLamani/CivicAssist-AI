@@ -54,6 +54,7 @@ export default function NewComplaint() {
       <dt>Saved at</dt><dd>{new Date(receipt.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</dd>
     </dl>
     <p className="hint">Saved in CivicAssist. This does not send a report to a government department.</p>
+    <p><Link className="button" href={`/complaints/${receipt.id}`}>Track this complaint</Link></p>
     <button onClick={() => { reset(); draft.current = null; setReceipt(null); }}>Report another issue</button>
     <p><Link href="/account">Back to account</Link></p>
   </section>;

@@ -1,6 +1,6 @@
 # CivicAssist AI
 
-Development foundation for an independent civic grievance platform for Bengaluru. Citizens can register, sign in, and submit a basic complaint. Government integrations, tracking, and advanced grievance workflows are not implemented yet.
+Development foundation for an independent civic grievance platform for Bengaluru. Citizens can register, sign in, submit complaints, and view their saved reports and current status. Government integrations and advanced grievance workflows are not implemented yet.
 
 ## Included
 
@@ -113,10 +113,19 @@ This minimal frontend stores tokens only in memory. Navigation through its links
 
 ## Basic complaint submission
 
-From `/account`, choose **Report a civic issue** to open `/complaints/new`. Enter a title (5–160 characters), description (10–5000), category, and street/landmark (5–500). The receipt shows the saved UUID complaint ID, submission time, and `submitted` status. Save the ID before leaving the page; complaint listing/tracking is not available in this increment. Submissions remain inside CivicAssist and are not delivered to a government department.
+From `/account`, choose **Report a civic issue** to open `/complaints/new`. Enter a title (5–160 characters), description (10–5000), category, and street/landmark (5–500). The receipt shows the saved UUID complaint ID, submission time, and `submitted` status, with a link to track the saved report. Submissions remain inside CivicAssist and are not delivered to a government department.
 
 `POST /api/v1/complaints` requires a valid bearer token for a citizen. JSON fields: `title`, `description`, `category`, `location`, and UUID `submission_id`. Categories are `roads`, `garbage`, `water_supply`, `drainage`, `streetlights`, `public_infrastructure`, `sanitation`, and `other`. The server sets ownership and status; client-supplied owner/status fields are rejected. Descriptions and locations are private; no public read/list endpoint is exposed.
 
 Each browser draft has a retry key. Retrying the same unchanged submission returns its original receipt (HTTP 200), while a new submission returns HTTP 201. Reusing a key with different data returns HTTP 409. The key is scoped to the signed-in citizen. Form data stays visible after transient errors and is not written to browser storage.
 
-Apply migration `0003_complaints` with `uv run alembic upgrade head`, or rebuild with Compose. Downgrading this migration deletes complaint records. Uploads, geographic coordinates/maps, AI processing, assignment, notifications, listing, and lifecycle updates remain separate increments.
+Apply migration `0003_complaints` with `uv run alembic upgrade head`, or rebuild with Compose. Downgrading this migration deletes complaint records. Uploads, geographic coordinates/maps, AI processing, assignment, notifications, and lifecycle updates remain separate increments.
+
+## Citizen listing and tracking
+
+Choose **View my complaints** from `/account` to open `/complaints`. Reports appear newest first, with 20 per page. Each links to `/complaints/{id}`, which shows the saved title, ID, category, description, location, submission time, and current status. Empty, loading, not-found, and connection-error states are shown explicitly. Use **Refresh** to fetch the current database record again.
+
+- `GET /api/v1/complaints?limit=20&offset=0`: citizen-only list, always scoped to the authenticated owner. Returns `items`, `total`, `limit`, and `offset`; summaries exclude descriptions/locations. Limits are 1–50 and offsets 0–100000, ordered by submission time then ID descending.
+- `GET /api/v1/complaints/{id}`: citizen-only saved report. Another owner's ID and an unknown ID both return the same HTTP 404 response. Unauthenticated/revoked sessions return HTTP 401; administrative/operator accounts return HTTP 403 on these citizen endpoints.
+
+These are private authenticated views, with `Cache-Control: no-store`; they are not public tracking links. Browser sessions still require signing in after a full page reload. No schema changes or new dependencies are needed for these reads. Only `submitted` status exists so far; status transitions, audit history, department assignments, and resolution evidence remain later increments.

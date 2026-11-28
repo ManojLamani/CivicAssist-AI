@@ -15,16 +15,34 @@ export const complaintSchema = z.object({
 });
 export type ComplaintInput = z.infer<typeof complaintSchema>;
 export type Receipt = ComplaintInput & { id: string; status: string; created_at: string };
+export type ComplaintSummary = Pick<Receipt, "id" | "title" | "category" | "status" | "created_at">;
+export type ComplaintPage = { items: ComplaintSummary[]; total: number; limit: number; offset: number };
 
-export async function submitComplaint(input: ComplaintInput, submissionId: string): Promise<Receipt> {
-  const data = complaintSchema.parse(input);
+async function complaintRequest<T>(path: string, body?: object): Promise<T> {
   const original = useAuth.getState().session;
-  if (!original) throw new Error("Sign in before submitting a complaint.");
+  if (!original) throw new Error("Sign in to access your complaints.");
   await loadCurrentUser();
   const current = useAuth.getState().session;
   if (!current || current.id !== original.id) throw new Error("Your session changed. Sign in and try again.");
+  return apiRequest<T>(path, body, current.tokens.access_token);
+}
+
+export function listComplaints(offset = 0): Promise<ComplaintPage> {
+  return complaintRequest<ComplaintPage>(`complaints?limit=20&offset=${offset}`);
+}
+
+export function getComplaint(id: string): Promise<Receipt> {
+  if (!z.string().uuid().safeParse(id).success) return Promise.reject(new Error("Complaint not found."));
+  return complaintRequest<Receipt>(`complaints/${id}`).catch(error => {
+    if (error instanceof ApiError && error.status === 404) throw new Error("Complaint not found.");
+    throw error;
+  });
+}
+
+export async function submitComplaint(input: ComplaintInput, submissionId: string): Promise<Receipt> {
+  const data = complaintSchema.parse(input);
   try {
-    return await apiRequest<Receipt>("complaints", { ...data, submission_id: submissionId }, current.tokens.access_token);
+    return await complaintRequest<Receipt>("complaints", { ...data, submission_id: submissionId });
   } catch (error) {
     if (error instanceof ApiError && error.status === 409) {
       throw new Error("This submission was already used for another report. Start a new report.");
