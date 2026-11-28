@@ -34,11 +34,11 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest<T>(path: string, body?: object, accessToken?: string): Promise<T> {
+export async function apiRequest<T>(path: string, body?: object, accessToken?: string, method?: "PATCH"): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/${path}`, {
-      method: body ? "POST" : "GET", cache: "no-store", signal: AbortSignal.timeout(10_000),
+      method: method ?? (body ? "POST" : "GET"), cache: "no-store", signal: AbortSignal.timeout(10_000),
       headers: { ...(body && { "Content-Type": "application/json" }),
         ...(accessToken && { Authorization: `Bearer ${accessToken}` }) },
       ...(body && { body: JSON.stringify(body) }),

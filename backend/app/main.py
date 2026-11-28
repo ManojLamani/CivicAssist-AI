@@ -6,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.admin import router as admin_router
 from app.auth import router as auth_router
 from app.complaints import router as complaint_router
 from app.config import get_auth_settings
@@ -21,11 +22,12 @@ app = FastAPI(title="CivicAssist API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3000")],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["Content-Type", "Authorization"],
 )
 app.include_router(auth_router)
 app.include_router(complaint_router)
+app.include_router(admin_router)
 
 
 @app.exception_handler(RequestValidationError)
