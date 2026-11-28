@@ -3,10 +3,12 @@ from enum import StrEnum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Identity,
     String,
     Text,
     UniqueConstraint,
@@ -104,6 +106,14 @@ class ComplaintCategory(StrEnum):
     OTHER = "other"
 
 
+class ComplaintStatus(StrEnum):
+    SUBMITTED = "submitted"
+    ACKNOWLEDGED = "acknowledged"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+    CLOSED = "closed"
+
+
 class Complaint(Base):
     __tablename__ = "complaints"
     __table_args__ = (
@@ -118,7 +128,10 @@ class Complaint(Base):
             "'streetlights', 'public_infrastructure', 'sanitation', 'other')",
             name="ck_complaints_category",
         ),
-        CheckConstraint("status = 'submitted'", name="ck_complaints_status"),
+        CheckConstraint(
+            "status IN ('submitted', 'acknowledged', 'in_progress', 'resolved', 'closed')",
+            name="ck_complaints_status",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -130,3 +143,30 @@ class Complaint(Base):
     location: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(32), server_default="submitted")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ComplaintStatusHistory(Base):
+    __tablename__ = "complaint_status_history"
+    __table_args__ = (
+        CheckConstraint(
+            "to_status IN ('submitted', 'acknowledged', 'in_progress', 'resolved', 'closed')",
+            name="ck_status_history_to_status",
+        ),
+        CheckConstraint(
+            "from_status IN ('submitted', 'acknowledged', 'in_progress', 'resolved', 'closed')",
+            name="ck_status_history_from_status",
+        ),
+        CheckConstraint("char_length(btrim(note)) >= 1", name="ck_status_history_note"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    complaint_id: Mapped[UUID] = mapped_column(
+        ForeignKey("complaints.id", ondelete="CASCADE"), index=True
+    )
+    actor_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    from_status: Mapped[str | None] = mapped_column(String(32))
+    to_status: Mapped[str] = mapped_column(String(32))
+    note: Mapped[str] = mapped_column(String(1000))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )

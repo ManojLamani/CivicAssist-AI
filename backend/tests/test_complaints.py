@@ -140,7 +140,10 @@ def test_tracking_cannot_read_another_citizens_complaint(auth_client, report):
     receipt = client.post("/api/v1/complaints", json=report, headers=owner).json()
     path = f"/api/v1/complaints/{receipt['id']}"
     response = client.get(path, headers=owner)
-    assert response.status_code == 200 and response.json() == receipt
+    assert response.status_code == 200
+    detail = response.json()
+    assert {key: value for key, value in detail.items() if key != "history"} == receipt
+    assert len(detail["history"]) == 1 and detail["history"][0]["to_status"] == "submitted"
     assert response.headers["cache-control"] == "no-store"
     other, _, _ = login(client, "another@example.com")
     forbidden = client.get(path, headers=other)

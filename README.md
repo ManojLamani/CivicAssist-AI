@@ -101,7 +101,7 @@ Use the API docs to register and log in, then paste the token into **Authorize**
 
 Access tokens expire after 15 minutes and are checked against their database session on protected requests, so logout and refresh-token replay revoke access immediately. Tokens issued before this session migration lack the required session ID; log in again after upgrading. Apply `uv run alembic upgrade head` for native development; Compose runs the migration automatically. Downgrading this migration deletes login sessions and refresh-token history.
 
-Email verification, password reset, login throttling, role-protected administrative endpoints, and persistent browser token storage remain separate follow-ups. Refresh tokens are credentials: keep them private and out of URLs/logs. Local HTTP is for development; deployed authentication requires HTTPS.
+Email verification, password reset, login throttling, and persistent browser token storage remain separate follow-ups. Refresh tokens are credentials: keep them private and out of URLs/logs. Local HTTP is for development; deployed authentication requires HTTPS.
 
 ## Browser authentication
 
@@ -119,7 +119,7 @@ From `/account`, choose **Report a civic issue** to open `/complaints/new`. Ente
 
 Each browser draft has a retry key. Retrying the same unchanged submission returns its original receipt (HTTP 200), while a new submission returns HTTP 201. Reusing a key with different data returns HTTP 409. The key is scoped to the signed-in citizen. Form data stays visible after transient errors and is not written to browser storage.
 
-Apply migration `0003_complaints` with `uv run alembic upgrade head`, or rebuild with Compose. Downgrading this migration deletes complaint records. Uploads, geographic coordinates/maps, AI processing, assignment, notifications, and lifecycle updates remain separate increments.
+Apply migration `0003_complaints` with `uv run alembic upgrade head`, or rebuild with Compose. Downgrading this migration deletes complaint records. Uploads, geographic coordinates/maps, AI processing, assignment, and notifications remain separate increments.
 
 ## Citizen listing and tracking
 
@@ -128,4 +128,15 @@ Choose **View my complaints** from `/account` to open `/complaints`. Reports app
 - `GET /api/v1/complaints?limit=20&offset=0`: citizen-only list, always scoped to the authenticated owner. Returns `items`, `total`, `limit`, and `offset`; summaries exclude descriptions/locations. Limits are 1–50 and offsets 0–100000, ordered by submission time then ID descending.
 - `GET /api/v1/complaints/{id}`: citizen-only saved report. Another owner's ID and an unknown ID both return the same HTTP 404 response. Unauthenticated/revoked sessions return HTTP 401; administrative/operator accounts return HTTP 403 on these citizen endpoints.
 
-These are private authenticated views, with `Cache-Control: no-store`; they are not public tracking links. Browser sessions still require signing in after a full page reload. No schema changes or new dependencies are needed for these reads. Only `submitted` status exists so far; status transitions, audit history, department assignments, and resolution evidence remain later increments.
+These are private authenticated views, with `Cache-Control: no-store`; they are not public tracking links. Browser sessions still require signing in after a full page reload. Complaint details also include chronological status history and citizen-visible notes. Department assignment and resolution evidence remain later increments.
+
+## Basic administrator status updates
+
+An existing `administrator` account gets **Manage complaints** on `/account`. `/admin/complaints` shows all reports with pagination; opening a report shows its details, history, and permitted next statuses. A note (1–1000 characters) is required and visible to the submitting citizen. Refresh the citizen's tracking page to see an update.
+
+- `GET /api/v1/admin/complaints` and `GET /api/v1/admin/complaints/{id}` require an administrator role checked against the database. Detail responses include `allowed_statuses`.
+- `PATCH /api/v1/admin/complaints/{id}/status`: JSON `expected_status`, `status`, and `note`. Supported transitions are `submitted → acknowledged → in_progress → resolved → closed`; resolved reports can return to `in_progress`. Closed reports cannot change. A mismatched current status or disallowed transition returns HTTP 409.
+
+Status changes and history entries commit together under a row lock. History records the actor internally, while responses expose only the transition, note, and timestamp. Entries cannot be edited or individually deleted; deleting their parent complaint permits cascade cleanup. Migration `0004_status_history` backfills original submissions and refuses downgrade while a complaint has progressed beyond `submitted`.
+
+Administrator access is app-wide in this increment. Only grant it through trusted database administration to an existing account by setting `users.role_name` to `administrator`; registration always creates citizens. There is no public role-management endpoint. Jurisdiction scoping, department assignment, attachments, and notifications are not included. No new dependencies are required.

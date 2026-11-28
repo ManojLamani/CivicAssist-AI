@@ -8,7 +8,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.auth import Database, get_current_user
-from app.models import Complaint, ComplaintCategory, User
+from app.complaint_status import record_status
+from app.models import Complaint, ComplaintCategory, ComplaintStatusHistory, User
 
 router = APIRouter(prefix="/api/v1/complaints", tags=["complaints"])
 
@@ -40,6 +41,28 @@ class ComplaintSummary(BaseModel):
     category: ComplaintCategory
     status: str
     created_at: datetime
+
+
+class StatusEvent(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    from_status: str | None
+    to_status: str
+    note: str
+    created_at: datetime
+
+
+class ComplaintDetail(ComplaintOutput):
+    history: list[StatusEvent]
+
+
+def complaint_detail(session: Database, complaint: Complaint):
+    history = session.scalars(
+        select(ComplaintStatusHistory)
+        .where(ComplaintStatusHistory.complaint_id == complaint.id)
+        .order_by(ComplaintStatusHistory.id)
+    ).all()
+    return {**ComplaintOutput.model_validate(complaint).model_dump(), "history": history}
 
 
 class ComplaintPage(BaseModel):
@@ -79,7 +102,7 @@ def list_complaints(
     return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
-@router.get("/{complaint_id}", response_model=ComplaintOutput)
+@router.get("/{complaint_id}", response_model=ComplaintDetail)
 def get_complaint(complaint_id: UUID, session: Database, response: Response, user: Citizen):
     response.headers["Cache-Control"] = "no-store"
     complaint = session.scalar(
@@ -87,7 +110,7 @@ def get_complaint(complaint_id: UUID, session: Database, response: Response, use
     )
     if complaint is None:
         raise HTTPException(status_code=404, detail="Complaint not found")
-    return complaint
+    return complaint_detail(session, complaint)
 
 
 @router.post("", status_code=201, response_model=ComplaintOutput)
@@ -101,6 +124,8 @@ def submit_complaint(
     complaint = Complaint(user_id=user.id, **data.model_dump())
     session.add(complaint)
     try:
+        session.flush()
+        record_status(session, complaint, user.id, None, "Complaint submitted.")
         session.commit()
     except IntegrityError:
         session.rollback()

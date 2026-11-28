@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/lib/auth";
-import { categories, complaintSchema, submitComplaint, type ComplaintInput, type Receipt } from "@/lib/complaints";
+import { categories, complaintSchema, statusLabel, submitComplaint, type ComplaintInput, type Receipt } from "@/lib/complaints";
 
 export default function NewComplaint() {
   const session = useAuth(state => state.session);
@@ -50,7 +50,7 @@ export default function NewComplaint() {
       <dt>Issue</dt><dd>{receipt.title}</dd>
       <dt>Category</dt><dd>{categories[receipt.category]}</dd>
       <dt>Location</dt><dd>{receipt.location}</dd>
-      <dt>Status</dt><dd>Submitted</dd>
+      <dt>Status</dt><dd>{statusLabel(receipt.status)}</dd>
       <dt>Saved at</dt><dd>{new Date(receipt.created_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</dd>
     </dl>
     <p className="hint">Saved in CivicAssist. This does not send a report to a government department.</p>
