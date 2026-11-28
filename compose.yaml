@@ -7,6 +7,7 @@ x-backend: &backend
     REDIS_URL: redis://redis:6379/0
     QDRANT_URL: http://qdrant:6333
     FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    JWT_SECRET: ${JWT_SECRET:-}
     GEMINI_API_KEY: ${GEMINI_API_KEY:-}
 
 services:
