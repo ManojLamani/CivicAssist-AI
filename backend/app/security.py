@@ -18,11 +18,12 @@ def unauthorized() -> HTTPException:
     )
 
 
-def create_access_token(user_id: UUID, settings: AuthSettings) -> str:
+def create_access_token(user_id: UUID, session_id: UUID, settings: AuthSettings) -> str:
     now = datetime.now(UTC)
     return jwt.encode(
         {
             "sub": str(user_id),
+            "sid": str(session_id),
             "iat": now,
             "exp": now + TOKEN_LIFETIME,
             "iss": "civicassist",
@@ -34,7 +35,7 @@ def create_access_token(user_id: UUID, settings: AuthSettings) -> str:
     )
 
 
-def decode_access_token(token: str, settings: AuthSettings) -> UUID:
+def decode_access_token(token: str, settings: AuthSettings) -> tuple[UUID, UUID]:
     try:
         claims = jwt.decode(
             token,
@@ -42,10 +43,10 @@ def decode_access_token(token: str, settings: AuthSettings) -> UUID:
             algorithms=["HS256"],
             issuer="civicassist",
             audience="civicassist-api",
-            options={"require": ["sub", "iat", "exp", "iss", "aud", "type"]},
+            options={"require": ["sub", "sid", "iat", "exp", "iss", "aud", "type"]},
         )
         if claims["type"] != "access":
             raise unauthorized()
-        return UUID(claims["sub"])
+        return UUID(claims["sub"]), UUID(claims["sid"])
     except (jwt.InvalidTokenError, ValueError, TypeError, AttributeError):
         raise unauthorized() from None

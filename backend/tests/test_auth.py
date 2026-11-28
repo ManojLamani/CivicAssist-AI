@@ -6,31 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import delete, select, update
-from sqlalchemy.orm import Session
 
 from app.config import AuthSettings, get_auth_settings
-from app.database import get_session
 from app.main import app
-from app.models import User
+from app.models import LoginSession, User
 from app.security import password_hash
 
 ACCOUNT = {"email": "citizen@example.com", "password": "long-test-password", "full_name": "Citizen"}
-
-
-@pytest.fixture
-def auth_client(migrated_database):
-    connection, _ = migrated_database
-
-    def session_override():
-        with Session(connection, join_transaction_mode="create_savepoint") as session:
-            yield session
-
-    app.dependency_overrides[get_session] = session_override
-    try:
-        with TestClient(app) as client:
-            yield client, connection
-    finally:
-        app.dependency_overrides.pop(get_session, None)
 
 
 def test_registration_login_and_current_user(auth_client):
@@ -117,14 +99,20 @@ def test_login_errors_do_not_reveal_account_existence(auth_client):
         {"sub": "not-a-uuid"},
         {"sub": str(uuid4())},
         {"exp": None},
+        {"sid": str(uuid4())},
+        {"sid": "invalid"},
     ],
 )
 def test_invalid_tokens_are_rejected(auth_client, changes):
-    client, _ = auth_client
+    client, connection = auth_client
     response = client.post("/api/v1/auth/register", json=ACCOUNT)
+    client.post(
+        "/api/v1/auth/login", json={"email": ACCOUNT["email"], "password": ACCOUNT["password"]}
+    )
     now = datetime.now(UTC)
     claims = {
         "sub": response.json()["id"],
+        "sid": str(connection.scalar(select(LoginSession.id))),
         "iat": now,
         "exp": now + timedelta(minutes=15),
         "iss": "civicassist",
