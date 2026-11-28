@@ -1,6 +1,6 @@
 # CivicAssist AI
 
-Development foundation for an independent civic grievance platform for Bengaluru. Citizen registration and login are available in the browser and API; grievance features and government integrations are not implemented yet.
+Development foundation for an independent civic grievance platform for Bengaluru. Citizens can register, sign in, and submit a basic complaint. Government integrations, tracking, and advanced grievance workflows are not implemented yet.
 
 ## Included
 
@@ -105,8 +105,18 @@ Email verification, password reset, login throttling, role-protected administrat
 
 ## Browser authentication
 
-Open `/register` to create a citizen account, then `/login` to sign in. `/account` verifies the current user through the API and provides logout. Forms validate inputs, prevent duplicate submissions, and show account-conflict, credential, and connection errors. No complaint dashboard or reporting workflow is included yet.
+Open `/register` to create a citizen account, then `/login` to sign in. `/account` verifies the current user through the API and provides logout and a link to report an issue. Forms validate inputs, prevent duplicate submissions, and show account-conflict, credential, and connection errors.
 
 This minimal frontend stores tokens only in memory. Navigation through its links preserves the session; reloading or closing the page requires signing in again. It does not write tokens to localStorage, sessionStorage, cookies, or URLs. Expired access checks share one refresh request and save the rotated token. A failed server logout retains the session for retry. Persistent browser sessions remain a separate follow-up.
 
 `NEXT_PUBLIC_API_URL` must be reachable from the browser, and the backend's `FRONTEND_URL` must match the frontend origin. These values are already configured by Compose. Run `npm test` in `frontend/` for the auth-client tests; CI runs them alongside typechecking and the build.
+
+## Basic complaint submission
+
+From `/account`, choose **Report a civic issue** to open `/complaints/new`. Enter a title (5–160 characters), description (10–5000), category, and street/landmark (5–500). The receipt shows the saved UUID complaint ID, submission time, and `submitted` status. Save the ID before leaving the page; complaint listing/tracking is not available in this increment. Submissions remain inside CivicAssist and are not delivered to a government department.
+
+`POST /api/v1/complaints` requires a valid bearer token for a citizen. JSON fields: `title`, `description`, `category`, `location`, and UUID `submission_id`. Categories are `roads`, `garbage`, `water_supply`, `drainage`, `streetlights`, `public_infrastructure`, `sanitation`, and `other`. The server sets ownership and status; client-supplied owner/status fields are rejected. Descriptions and locations are private; no public read/list endpoint is exposed.
+
+Each browser draft has a retry key. Retrying the same unchanged submission returns its original receipt (HTTP 200), while a new submission returns HTTP 201. Reusing a key with different data returns HTTP 409. The key is scoped to the signed-in citizen. Form data stays visible after transient errors and is not written to browser storage.
+
+Apply migration `0003_complaints` with `uv run alembic upgrade head`, or rebuild with Compose. Downgrading this migration deletes complaint records. Uploads, geographic coordinates/maps, AI processing, assignment, notifications, listing, and lifecycle updates remain separate increments.

@@ -38,7 +38,7 @@ export default function Account() {
     <p className="eyebrow">YOUR ACCOUNT</p>
     <h1>Welcome, {session.user.full_name}.</h1>
     <p>Signed in as <strong>{session.user.email}</strong>.</p>
-    <p className="hint">Complaint reporting and tracking are coming in a later update.</p>
+    <p><Link className="button" href="/complaints/new">Report a civic issue</Link></p>
     <p className="hint">Refreshing this page will require you to sign in again.</p>
     {error && <p role="alert" className="form-error">{error}</p>}
     <button disabled={busy} onClick={logout}>{busy ? "Signing out…" : "Sign out"}</button>

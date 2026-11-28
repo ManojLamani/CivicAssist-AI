@@ -22,21 +22,22 @@ type Session = { id: string; user: User; tokens: Tokens };
 // Deliberately not persisted: tokens never enter localStorage, sessionStorage, or URLs.
 export const useAuth = create<{ session: Session | null }>(() => ({ session: null }));
 
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number;
   constructor(status: number) {
     super(status === 401 ? "Email or password is incorrect, or your session has expired."
       : status === 409 ? "This email is already registered. Please sign in."
+      : status === 403 ? "Your account does not have permission for this action."
       : status === 422 ? "Check your details and try again."
       : "The service is unavailable. Please try again.");
     this.status = status;
   }
 }
 
-async function request<T>(path: string, body?: object, accessToken?: string): Promise<T> {
+export async function apiRequest<T>(path: string, body?: object, accessToken?: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/auth/${path}`, {
+    response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/${path}`, {
       method: body ? "POST" : "GET", cache: "no-store", signal: AbortSignal.timeout(10_000),
       headers: { ...(body && { "Content-Type": "application/json" }),
         ...(accessToken && { Authorization: `Bearer ${accessToken}` }) },
@@ -51,13 +52,13 @@ async function request<T>(path: string, body?: object, accessToken?: string): Pr
 
 export async function registerAccount(input: AuthInput) {
   const data = authSchema("register").parse(input);
-  await request<User>("register", data);
+  await apiRequest<User>("auth/register", data);
 }
 
 export async function signIn(input: AuthInput) {
   const { email, password } = authSchema("login").parse(input);
-  const tokens = await request<Tokens>("login", { email, password });
-  const user = await request<User>("me", undefined, tokens.access_token);
+  const tokens = await apiRequest<Tokens>("auth/login", { email, password });
+  const user = await apiRequest<User>("auth/me", undefined, tokens.access_token);
   useAuth.setState({ session: { id: crypto.randomUUID(), user, tokens } });
 }
 
@@ -69,7 +70,7 @@ export async function loadCurrentUser() {
   try {
     let user: User;
     try {
-      user = await request<User>("me", undefined, original.tokens.access_token);
+      user = await apiRequest<User>("auth/me", undefined, original.tokens.access_token);
     } catch (error) {
       if (!(error instanceof ApiError) || error.status !== 401) throw error;
       const current = useAuth.getState().session;
@@ -77,7 +78,7 @@ export async function loadCurrentUser() {
       let tokens = current.tokens;
       if (tokens.access_token === original.tokens.access_token) {
         if (refreshInFlight?.id !== original.id) {
-          const promise = request<Tokens>("refresh", { refresh_token: current.tokens.refresh_token })
+          const promise = apiRequest<Tokens>("auth/refresh", { refresh_token: current.tokens.refresh_token })
           .then(tokens => {
             if (useAuth.getState().session?.id === original.id) {
               useAuth.setState({ session: { ...current, tokens } });
@@ -88,7 +89,7 @@ export async function loadCurrentUser() {
         }
         tokens = await refreshInFlight.promise;
       }
-      user = await request<User>("me", undefined, tokens.access_token);
+      user = await apiRequest<User>("auth/me", undefined, tokens.access_token);
     }
     const current = useAuth.getState().session;
     if (current?.id === original.id) useAuth.setState({ session: { ...current, user } });
@@ -103,6 +104,6 @@ export async function loadCurrentUser() {
 
 export async function signOut() {
   const current = useAuth.getState().session;
-  if (current) await request<void>("logout", { refresh_token: current.tokens.refresh_token });
+  if (current) await apiRequest<void>("auth/logout", { refresh_token: current.tokens.refresh_token });
   if (useAuth.getState().session?.id === current?.id) useAuth.setState({ session: null });
 }
